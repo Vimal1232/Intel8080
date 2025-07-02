@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 3.13)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
+
+project(Intel8080)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(SDL3_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/share/cmake/SDL3")
+
+find_package(SDL3 REQUIRED)
+
+file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+
+# Create executable
+add_executable(Intel8080 ${MY_SOURCES})
+
+# Include directories
+target_include_directories(Intel8080 PUBLIC include)
+
+target_link_libraries(Intel8080 PRIVATE SDL3::SDL3)
