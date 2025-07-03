@@ -5,9 +5,15 @@
 int main()
 {
 
-    Memory memory;
+    // Memory memory;
 
-    memory.Load_ROM();
+    // memory.write(0x00,0x46);
+
+    // CPU cpu(memory);
+
+    // uint8_t opcode = cpu.fetch();
+
+    // cpu.decode(opcode);
 
     std::cout << "Frontend" << std::endl;
 }

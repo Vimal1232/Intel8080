@@ -31,9 +31,9 @@ public:
         }
     };
 
-    void write(uint16_t address, uint16_t value)
+    void write(uint16_t address, uint8_t value)
     {
-        if (address <= ROM_END)
+        if (address >= ROM_END)
         {
             std::cout << "Can't write here" << std::endl;
         }
