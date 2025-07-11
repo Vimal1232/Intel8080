@@ -83,7 +83,7 @@ public:
             break;
         }
 
-            // Different OpCodes but Serve Same Purpose of MVI
+        // Different OpCodes but Serve Same Purpose of MVI
 
         case 0x06:
         case 0x0e:
@@ -148,6 +148,8 @@ public:
 
                 break;
             }
+
+            break;
         }
 
         // For LDA There is only one Opcode
@@ -267,6 +269,8 @@ public:
 
             L = E;
             E = temp;
+
+            break;
         }
 
         // 8 Opcode for ADD
@@ -282,28 +286,61 @@ public:
             } else {
                 operand = *lookup_table[Src];
             }
-            uint8_t Result = A + operand;
+            uint16_t Result = A + operand;
+            // Auxillary Carry Flag
 
-            if(Result == 0){
+            if((A & 0x0F) + (operand &0x0F) > 0x0F ){
+                 PSW |= 0x10;
+            } else {
+                PSW &= ~0x10;
+            }
+
+            A = Result & 0xFF;
+
+            // ZERO Flag
+
+            if((A) == 0){
                 PSW |= 0x40;
             } else {
                 PSW &= ~0x40;
             }
 
-            if((Result & 0x80)>> 7 == 0x01){
+            // Sign Flag
+
+            if((A & 0x80)>> 7 == 0x01){
                 PSW |= 0x80;
             } else {
                 PSW &= ~0x80;
             }
 
+            // Parity Flag
+
+            int Count = 0;
+            uint8_t Temp = A;
+
+            for (int i = 0 ; i < 8; i++) {
+                if(Temp & 0x01){
+                    Count++;
+                }
+                Temp >>= 0x01;
+            }
+
+            if(Count % 2 == 0){
+                PSW |= 0x04;
+            } else {
+                PSW &= ~0x04;
+            }
+
+            // Carry Flag
 
 
+            if(Result > 0xFF){
+                PSW |= 0x01;
+            } else{
+                PSW &= ~0x01;
+            }
 
-
-
-
-
-
+            break;
         }
         }
     }
