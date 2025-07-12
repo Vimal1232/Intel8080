@@ -403,18 +403,22 @@ public:
             break;
         }
 
+        // 1 Opcode for ACI
 
+        case 0xce:{
+            uint8_t Data = memory.read(PC);
+            PC++;
+            uint8_t carry =  PSW & 0x01;
+            uint8_t originalA = A ;
 
+            uint16_t Result16 = A + Data + carry;
+            uint8_t Result8 = Result16 & 0xFF;
+            A = Result8;
 
+            Flag_Set_ADD(Result8, Result16, Data + carry, originalA, true , carry);
 
-
-
-
-
-
-
-
-
+            break;
+        }
         }
     }
 };
