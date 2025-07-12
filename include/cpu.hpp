@@ -46,27 +46,21 @@ public:
     }
 
 
-    void Flag_Set_ALU(uint8_t result8 , uint16_t result16 , uint8_t operand , uint8_t OriginalA , bool ADC = false , uint8_t Carry = 0 ){
+    void Flag_Set_ALU(uint8_t result8 , uint16_t result16 , uint8_t operand , uint8_t OriginalA , bool SUB = false){
 
-            if(ADC){
-                if((OriginalA & 0x0F) + (operand &0x0F) + Carry > 0x0F ){
-                 PSW |= 0x10;
-            } else {
-                PSW &= ~0x10;
-            }
 
-            } else {
-                 //Auxillary Carry for ADD
 
+        if(SUB){
+
+        } else {
+         //Auxillary Carry 
           if((OriginalA & 0x0F) + (operand &0x0F) > 0x0F ){
                  PSW |= 0x10;
             } else {
                 PSW &= ~0x10;
             }
-            
-            }
-       
-          
+        }
+        
 
             // ZERO Flag
 
@@ -103,13 +97,25 @@ public:
 
             // Carry Flag
 
+            if(SUB){
+                if(operand > OriginalA){
+                    PSW |= 0x01;
+                } else {
+                   PSW &= ~0x01;
+                }
 
+            } else {
             if(result16 > 0xFF){
                 PSW |= 0x01;
             } else{
                 PSW &= ~0x01;
             }
 
+
+            }
+
+
+           
 
     }
 
@@ -398,7 +404,7 @@ public:
             uint8_t Result8 = Result16 & 0xFF;
             A = Result8;
 
-            Flag_Set_ALU(Result8, Result16,  Operand + carry,  originalA , true,  carry);
+            Flag_Set_ALU(Result8, Result16,  Operand + carry,  originalA );
 
             break;
         }
@@ -415,9 +421,27 @@ public:
             uint8_t Result8 = Result16 & 0xFF;
             A = Result8;
 
-            Flag_Set_ALU(Result8, Result16, Data + carry, originalA, true , carry);
+            Flag_Set_ALU(Result8, Result16, Data + carry, originalA);
 
             break;
+        }
+
+        // 8 Opcodes For SUB
+
+        case 0x90 ... 0x97:{
+            uint8_t src = opcode & 0x07;
+            uint8_t operand;
+            uint8_t originalA = A;
+
+            if(src == 0x06){
+                uint16_t MemLoc = H << 8 | L;
+                operand = memory.read(MemLoc);
+            } else {
+                operand = *lookup_table[src];
+            } 
+            uint16_t Result16 = A - operand;
+            uint8_t Result8 = Result16 & 0xFF;
+            A = Result8;
         }
         }
     }
