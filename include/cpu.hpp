@@ -45,6 +45,74 @@ public:
         return opcode;
     }
 
+
+    void Flag_Set_ADD(uint8_t result8 , uint16_t result16 , uint8_t operand , uint8_t OriginalA , bool ADC = false , uint8_t Carry = 0 ){
+
+            if(ADC){
+                if((OriginalA & 0x0F) + (operand &0x0F) + Carry > 0x0F ){
+                 PSW |= 0x10;
+            } else {
+                PSW &= ~0x10;
+            }
+
+            } else {
+                 //Auxillary Carry for ADD
+
+          if((OriginalA & 0x0F) + (operand &0x0F) > 0x0F ){
+                 PSW |= 0x10;
+            } else {
+                PSW &= ~0x10;
+            }
+            
+            }
+       
+          
+
+            // ZERO Flag
+
+            if((result8) == 0){
+                PSW |= 0x40;
+            } else {
+                PSW &= ~0x40;
+            }
+
+            // Sign Flag
+
+            if((result8 & 0x80)>> 7 == 0x01){
+                PSW |= 0x80;
+            } else {
+                PSW &= ~0x80;
+            }
+
+            // Parity Flag
+            int Count = 0;
+            uint8_t Temp = result8;
+
+            for (int i = 0 ; i < 8; i++) {
+                if(Temp & 0x01){
+                    Count++;
+                }
+                Temp >>= 0x01;
+            }
+
+            if(Count % 2 == 0){
+                PSW |= 0x04;
+            } else {
+                PSW &= ~0x04;
+            }
+
+            // Carry Flag
+
+
+            if(result16 > 0xFF){
+                PSW |= 0x01;
+            } else{
+                PSW &= ~0x01;
+            }
+
+
+    }
+
     void decode(uint8_t opcode)
     {
 
@@ -276,72 +344,77 @@ public:
         // 8 Opcode for ADD
 
         case 0x80 ... 0x87:{
-
             uint8_t Src = opcode & 0x07;
-            uint8_t operand;
+            uint8_t Operand;
+            uint8_t originalA = A;
 
             if(Src == 0x06){
                 uint16_t MemLoc = H << 8 | L;
-                 operand = memory.read(MemLoc);
+                 Operand = memory.read(MemLoc);
             } else {
-                operand = *lookup_table[Src];
+                Operand = *lookup_table[Src];
             }
-            uint16_t Result = A + operand;
-            // Auxillary Carry Flag
+            uint16_t Result16 = A + Operand;
+            uint8_t Result8 = Result16 & 0xFF;
+            A = Result8;
 
-            if((A & 0x0F) + (operand &0x0F) > 0x0F ){
-                 PSW |= 0x10;
+            Flag_Set_ADD(Result8, Result16, Operand, originalA);
+            break;
+        }
+
+        // 1 Opcode For ADI
+
+        case 0xc6:{
+            uint8_t Data = memory.read(PC);
+            PC++;
+
+            uint8_t originalA = A;
+            uint16_t Result16 = A + Data;
+            uint8_t Result8 = Result16 & 0xFF;
+            A = Result8;
+
+            Flag_Set_ADD(Result8, Result16, Data, originalA);
+            break;
+
+        }
+
+
+        // 8 Opcodes For ADC
+
+        case 0x88 ... 0x8f:{
+            uint8_t src = opcode & 0x07;
+            uint8_t Operand;
+            uint8_t originalA = A;
+            uint8_t Carry = PSW & 0x01;
+
+            if(src == 0x06){
+                uint16_t MemLoc = H << 8 | L;
+                Operand = memory.read(MemLoc);
             } else {
-                PSW &= ~0x10;
+                Operand = *lookup_table[src];
             }
 
-            A = Result & 0xFF;
+            uint16_t Result16 = A + Operand + Carry;
+            uint8_t Result8 = Result16 & 0xFF;
+            A = Result8;
 
-            // ZERO Flag
-
-            if((A) == 0){
-                PSW |= 0x40;
-            } else {
-                PSW &= ~0x40;
-            }
-
-            // Sign Flag
-
-            if((A & 0x80)>> 7 == 0x01){
-                PSW |= 0x80;
-            } else {
-                PSW &= ~0x80;
-            }
-
-            // Parity Flag
-
-            int Count = 0;
-            uint8_t Temp = A;
-
-            for (int i = 0 ; i < 8; i++) {
-                if(Temp & 0x01){
-                    Count++;
-                }
-                Temp >>= 0x01;
-            }
-
-            if(Count % 2 == 0){
-                PSW |= 0x04;
-            } else {
-                PSW &= ~0x04;
-            }
-
-            // Carry Flag
-
-
-            if(Result > 0xFF){
-                PSW |= 0x01;
-            } else{
-                PSW &= ~0x01;
-            }
+            Flag_Set_ADD(Result8, Result16,  Operand + Carry,  originalA , true, Carry);
 
             break;
         }
+
+
+
+        
+
+
+
+
+
+
+
+
+
         }
     }
 };
