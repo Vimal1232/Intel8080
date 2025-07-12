@@ -46,7 +46,7 @@ public:
     }
 
 
-    void Flag_Set_ADD(uint8_t result8 , uint16_t result16 , uint8_t operand , uint8_t OriginalA , bool ADC = false , uint8_t Carry = 0 ){
+    void Flag_Set_ALU(uint8_t result8 , uint16_t result16 , uint8_t operand , uint8_t OriginalA , bool ADC = false , uint8_t Carry = 0 ){
 
             if(ADC){
                 if((OriginalA & 0x0F) + (operand &0x0F) + Carry > 0x0F ){
@@ -358,7 +358,7 @@ public:
             uint8_t Result8 = Result16 & 0xFF;
             A = Result8;
 
-            Flag_Set_ADD(Result8, Result16, Operand, originalA);
+            Flag_Set_ALU(Result8, Result16, Operand, originalA);
             break;
         }
 
@@ -373,7 +373,7 @@ public:
             uint8_t Result8 = Result16 & 0xFF;
             A = Result8;
 
-            Flag_Set_ADD(Result8, Result16, Data, originalA);
+            Flag_Set_ALU(Result8, Result16, Data, originalA);
             break;
 
         }
@@ -398,7 +398,7 @@ public:
             uint8_t Result8 = Result16 & 0xFF;
             A = Result8;
 
-            Flag_Set_ADD(Result8, Result16,  Operand + carry,  originalA , true,  carry);
+            Flag_Set_ALU(Result8, Result16,  Operand + carry,  originalA , true,  carry);
 
             break;
         }
@@ -415,7 +415,7 @@ public:
             uint8_t Result8 = Result16 & 0xFF;
             A = Result8;
 
-            Flag_Set_ADD(Result8, Result16, Data + carry, originalA, true , carry);
+            Flag_Set_ALU(Result8, Result16, Data + carry, originalA, true , carry);
 
             break;
         }
