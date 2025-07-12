@@ -385,7 +385,7 @@ public:
             uint8_t src = opcode & 0x07;
             uint8_t Operand;
             uint8_t originalA = A;
-            uint8_t Carry = PSW & 0x01;
+            uint8_t carry = PSW & 0x01;
 
             if(src == 0x06){
                 uint16_t MemLoc = H << 8 | L;
@@ -394,18 +394,18 @@ public:
                 Operand = *lookup_table[src];
             }
 
-            uint16_t Result16 = A + Operand + Carry;
+            uint16_t Result16 = A + Operand + carry;
             uint8_t Result8 = Result16 & 0xFF;
             A = Result8;
 
-            Flag_Set_ADD(Result8, Result16,  Operand + Carry,  originalA , true, Carry);
+            Flag_Set_ADD(Result8, Result16,  Operand + carry,  originalA , true,  carry);
 
             break;
         }
 
 
 
-        
+
 
 
 
