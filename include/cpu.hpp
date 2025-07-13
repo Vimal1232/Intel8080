@@ -46,6 +46,11 @@ class CPU {
   void Flag_Set_ALU(uint8_t result8, uint16_t result16, uint8_t operand,
                     uint8_t OriginalA, bool SUB = false) {
     if (SUB) {
+      if ((OriginalA & 0x0F) < (operand & 0x0F)) {
+        PSW |= 0x10;
+      } else {
+        PSW &= ~0x10;
+      }
     } else {
       if ((OriginalA & 0x0F) + (operand & 0x0F) > 0x0F) {
         PSW |= 0x10;
@@ -102,6 +107,54 @@ class CPU {
       } else {
         PSW &= ~0x01;
       }
+    }
+  }
+
+  void Flag_INDC(uint8_t result8, uint8_t auxdata, bool DCR = false) {
+    if (DCR) {
+      if ((auxdata & 0x0F) < 1) {
+        PSW |= 0x10;
+      } else {
+        PSW &= ~0x10;
+      }
+    } else {
+      if ((auxdata & 0x0F) + 1 > 0x0F) {
+        PSW |= 0x10;
+      } else {
+        PSW &= ~0x10;
+      }
+    }
+
+    // ZERO Flag
+    if ((result8) == 0) {
+      PSW |= 0x40;
+    } else {
+      PSW &= ~0x40;
+    }
+
+    // Sign Flag
+
+    if ((result8 & 0x80) >> 7 == 0x01) {
+      PSW |= 0x80;
+    } else {
+      PSW &= ~0x80;
+    }
+
+    // Parity Flag
+    int Count = 0;
+    uint8_t Temp = result8;
+
+    for (int i = 0; i < 8; i++) {
+      if (Temp & 0x01) {
+        Count++;
+      }
+      Temp >>= 0x01;
+    }
+
+    if (Count % 2 == 0) {
+      PSW |= 0x04;
+    } else {
+      PSW &= ~0x04;
     }
   }
 
@@ -391,18 +444,261 @@ class CPU {
 
       case 0x90 ... 0x97: {
         uint8_t src = opcode & 0x07;
-        uint8_t operand;
+        uint8_t Operand;
         uint8_t originalA = A;
 
         if (src == 0x06) {
           uint16_t MemLoc = H << 8 | L;
-          operand = memory.read(MemLoc);
+          Operand = memory.read(MemLoc);
         } else {
-          operand = *lookup_table[src];
+          Operand = *lookup_table[src];
         }
-        uint16_t Result16 = A - operand;
+        uint16_t Result16 = A - Operand;
         uint8_t Result8 = Result16 & 0xFF;
         A = Result8;
+
+        Flag_Set_ALU(Result8, Result16, Operand, originalA, true);
+
+        break;
+      }
+
+        // 1 Opcode for SUI
+
+      case 0xd6: {
+        uint8_t Data = memory.read(PC);
+        PC++;
+        uint8_t originalA = A;
+        uint16_t Result16 = A - Data;
+        uint8_t Result8 = Result16 & 0xFF;
+        A = Result8;
+
+        Flag_Set_ALU(Result8, Result16, Data, originalA, true);
+
+        break;
+      }
+
+        // 8 Opcodes For SBB
+
+      case 0x98 ... 0x9f: {
+        uint8_t src = opcode & 0x07;
+        uint8_t Borrow = PSW & 0x01;
+        uint8_t Operand;
+        uint8_t originalA = A;
+
+        if (src == 0x06) {
+          uint16_t MemLoc = H << 8 | L;
+          Operand = memory.read(MemLoc);
+        } else {
+          Operand = *lookup_table[src];
+        }
+
+        uint16_t Result16 = A - (Operand - Borrow);
+        uint8_t Result8 = Result16 & 0xFF;
+        A = Result8;
+
+        Flag_Set_ALU(Result8, Result16, Operand - Borrow, originalA, true);
+
+        break;
+      }
+        // 1 opcode of SBI
+
+      case 0xde: {
+        uint8_t Data = memory.read(PC);
+        PC++;
+        uint8_t originalA = A;
+        uint8_t Borrow = PSW & 0x01;
+        uint16_t Result16 = A - (Data - Borrow);
+        uint8_t Result8 = Result16 & 0xff;
+        A = Result8;
+
+        Flag_Set_ALU(Result8, Result16, Data - Borrow, originalA, true);
+
+        break;
+      }
+
+        // 8 Opcodes FOR INR
+
+      case 0x04:
+      case 0x14:
+      case 0x24:
+      case 0x34:
+      case 0x0c:
+      case 0x1c:
+      case 0x2c:
+      case 0x3c: {
+        uint8_t Dest = (opcode & 0x38) >> 3;
+        uint8_t Data;
+        uint8_t AUXDATA;
+
+        if (Dest == 0x06) {
+          uint16_t MemLoc = H << 8 | L;
+          Data = memory.read(MemLoc);
+          AUXDATA = Data;
+          memory.write(MemLoc, Data + 1);
+        } else {
+          Data = *lookup_table[Dest];
+          AUXDATA = Data;
+          *lookup_table[Dest] = Data + 1;
+        }
+        uint8_t Result = Data + 1;
+
+        Flag_INDC(Result, AUXDATA, true);
+
+        break;
+      }
+
+        // 8 opcodes For DCR
+
+      case 0x05:
+      case 0x15:
+      case 0x25:
+      case 0x35:
+      case 0x0d:
+      case 0x1d:
+      case 0x2d:
+      case 0x3d: {
+        uint8_t dest = (opcode & 0x38) >> 3;
+        uint8_t Data;
+        uint8_t AUXDATA;
+
+        if (dest == 0x06) {
+          uint16_t MemLoc = H << 8 | L;
+          uint8_t Data = memory.read(MemLoc);
+          AUXDATA = Data;
+          memory.write(MemLoc, Data - 1);
+        } else {
+          Data = *lookup_table[dest];
+          AUXDATA = Data;
+          *lookup_table[dest] = Data - 1;
+        }
+        uint8_t Result = Data - 1;
+
+        Flag_INDC(Result, AUXDATA, true);
+
+        break;
+      }
+
+        // 4 Opcode For INX
+
+      case 0x03:
+      case 0x13:
+      case 0x23:
+      case 0x33: {
+        uint8_t RP = (opcode & 0x30) >> 4;
+
+        switch (RP) {
+          case 0x00: {
+            uint16_t Pair = B << 8 | C;
+            Pair++;
+            C = Pair & 0xFF;
+            B = (Pair & 0xFF00) >> 8;
+
+            break;
+          }
+          case 0x01: {
+            uint16_t Pair = D << 8 | E;
+            Pair++;
+            E = Pair & 0xFF;
+            D = (Pair & 0xFF00) >> 8;
+            break;
+          }
+          case 0x02: {
+            uint16_t Pair = H << 8 | L;
+            Pair++;
+            L = Pair & 0xFF;
+            H = (Pair & 0xFF00) >> 8;
+            break;
+          }
+          case 0x03: {
+            SP++;
+            break;
+          }
+        }
+        break;
+      }
+
+        // 4 Opcode for DCX
+
+      case 0x08:
+      case 0x18:
+      case 0x28:
+      case 0x38: {
+        uint8_t RP = (opcode & 0x30) >> 4;
+
+        switch (RP) {
+          case 0x00: {
+            uint16_t Pair = B << 8 | C;
+            Pair--;
+            C = Pair & 0xFF;
+            B = (Pair & 0xFF00) >> 8;
+            break;
+          }
+          case 0x01: {
+            uint16_t Pair = D << 8 | E;
+            Pair--;
+            E = Pair & 0xFF;
+            D = (Pair & 0xFF00) >> 8;
+            break;
+          }
+          case 0x02: {
+            uint16_t Pair = H << 8 | L;
+            Pair--;
+            L = Pair & 0xFF;
+            H = (Pair & 0xFF00) >> 8;
+            break;
+          }
+          case 0x03: {
+            SP--;
+            break;
+          }
+        }
+        break;
+      }
+
+        // 4 Opcodes For DAD
+
+      case 0x09:
+      case 0x19:
+      case 0x29:
+      case 0x39: {
+        uint8_t HL = H >> 8 | L;
+        uint16_t RP = (opcode & 0x30) >> 4;
+        uint32_t Result;
+
+        switch (RP) {
+          case 0x00: {
+            uint16_t Data = B << 8 | C;
+            Result = Data + HL;
+            break;
+          }
+          case 0x01: {
+            uint16_t Data = D << 8 | E;
+            Result = Data + HL;
+
+            break;
+          }
+
+          case 0x02: {
+            uint16_t Data = HL;
+            Result = Data + HL;
+            break;
+          }
+
+          case 0x03: {
+            uint16_t Data = SP;
+            Result = Data + HL;
+            break;
+          }
+        }
+        L = Result & 0xFF;
+        H = (Result & 0xFF00) >> 8;
+
+        if (Result > 0xFFFF) {
+          PSW |= 0x01;
+        } else {
+          PSW &= ~0x01;
+        }
+        break;
       }
     }
   }
