@@ -996,24 +996,65 @@ class CPU {
         uint16_t MemLoc = HighBits << 8 | LowBits;
         switch (CCC) {
           case 0x00: {
-            if ((PSW & 0x01) == 1) {
-              PC = MemLoc;
-            }
-            break;
-          }
-          case 0x01: {
-            if ((PSW & 0x01) == 0) {
+            if ((PSW & 0x40) == 0) {
               PC = MemLoc;
             }
             break;
           }
 
-          case 0x02: {
+          case 0x01: {
+            if ((PSW & 0x40) != 0) {
+              PC = MemLoc;
+            }
             break;
+          }
+          case 0x02: {
+            if ((PSW & 0x01) == 0) {
+              PC = MemLoc;
+            }
+            break;
+          }
+          case 0x03: {
+            if ((PSW & 0x01) != 0) {
+              PC = MemLoc;
+            }
+            break;
+          }
+
+          case 0x04: {
+            if ((PSW & 0x04) == 0) {
+              PC = MemLoc;
+            }
+
+            break;
+          }
+          case 0x05: {
+            if ((PSW & 0x04) != 0) {
+              PC = MemLoc;
+            }
+            break;
+          }
+
+          case 0x06: {
+            if ((PSW & 0x80) == 0) {
+              PC = MemLoc;
+              break;
+            }
+          }
+          case 0x07: {
+            if ((PSW & 0x80) != 0) {
+              PC = MemLoc;
+              break;
+            }
           }
         }
         break;
       }
+      
+
+
+
+
     }
   }
 };
