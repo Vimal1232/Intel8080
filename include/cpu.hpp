@@ -158,6 +158,75 @@ class CPU {
     }
   }
 
+  enum Instruction {
+    ANA,
+    XRA,
+    ORA,
+    RLC,
+    RRC,
+    RAL,
+    RAR,
+    CMA,
+    CMC,
+    STC
+  };
+
+  void Flag_Setting_Logical(uint8_t result, Instruction instruction) {
+    // Auxillary FLag
+
+    switch (instruction) {
+      case ANA: {
+        PSW |= 0x10;
+        break;
+      }
+
+      case ORA: {
+        PSW &= ~0x10;
+        break;
+      }
+
+      case XRA: {
+        PSW &= ~0x10;
+        break;
+      }
+    }
+
+    // Carry Flag Reset
+    PSW &= ~0x01;
+
+    // ZERO Flag
+    if ((result) == 0) {
+      PSW |= 0x40;
+    } else {
+      PSW &= ~0x40;
+    }
+
+    // Sign Flag
+
+    if ((result & 0x80) >> 7 == 0x01) {
+      PSW |= 0x80;
+    } else {
+      PSW &= ~0x80;
+    }
+
+    // Parity Flag
+    int Count = 0;
+    uint8_t Temp = result;
+
+    for (int i = 0; i < 8; i++) {
+      if (Temp & 0x01) {
+        Count++;
+      }
+      Temp >>= 0x01;
+    }
+
+    if (Count % 2 == 0) {
+      PSW |= 0x04;
+    } else {
+      PSW &= ~0x04;
+    }
+  }
+
   void decode(uint8_t opcode) {
     uint8_t* lookup_table[8] = {&B, &C, &D, &E, &H, &L, nullptr, &A};
 
@@ -700,6 +769,141 @@ class CPU {
         }
         break;
       }
+
+        // 8 Opcode of ANA
+
+      case 0xa0 ... 0xa7: {
+        uint8_t Src = opcode & 0x07;
+        uint8_t Result;
+
+        if (Src == 0x06) {
+          uint16_t MemLoc = H << 8 | L;
+          uint8_t Data = memory.read(MemLoc);
+          Result = A & Data;
+        } else {
+          Result = A & *lookup_table[Src];
+        }
+        A = Result;
+        Flag_Setting_Logical(Result, ANA);
+        break;
+      }
+
+        // 1 opcode for ANI
+
+      case 0xe6: {
+        uint8_t Data = memory.read(PC);
+        PC++;
+
+        uint8_t Result = A & Data;
+        A = Result;
+
+        Flag_Setting_Logical(Result, ANA);
+
+        break;
+      }
+
+        // 8 Opcodes For XRA
+
+      case 0xa8 ... 0xaf: {
+        uint8_t Src = opcode & 0x07;
+        uint8_t Result;
+        if (Src == 0x06) {
+          uint16_t MemLoc = H << 8 | L;
+          uint8_t Data = memory.read(MemLoc);
+          Result = A ^ Data;
+        } else {
+          Result = A ^ *lookup_table[Src];
+        }
+        A = Result;
+        Flag_Setting_Logical(Result, XRA);
+        break;
+      }
+
+        // 1 Opcode For XRI
+
+      case 0xee: {
+        uint8_t Data = memory.read(PC);
+        PC++;
+
+        uint8_t Result = A ^ Data;
+        A = Result;
+
+        Flag_Setting_Logical(Result, XRA);
+
+        break;
+      }
+
+        // 8 Opcodes for ORA
+
+      case 0xb0 ... 0x0b7: {
+        uint8_t Src = opcode & 0x07;
+        uint8_t Result;
+
+        if (Src == 0x06) {
+          uint16_t MemLoc = H << 8 | L;
+          uint8_t Data = memory.read(MemLoc);
+          Result = A | Data;
+        } else {
+          Result = A | *lookup_table[Src];
+        }
+        A = Result;
+
+        Flag_Setting_Logical(Result, ORA);
+        break;
+      }
+
+      // 1 Opcode for ORI
+      case 0xf6: {
+        uint8_t Data = memory.read(PC);
+        PC++;
+
+        uint8_t Result = A | Data;
+        A = Result;
+
+        Flag_Setting_Logical(Result, ORA);
+
+        break;
+      }
+
+      // 8 Opcodes For CMP
+      case 0xb8 ... 0xbf: {
+        uint8_t src = opcode & 0x07;
+        uint8_t Operand;
+
+        if (src == 0x06) {
+          uint16_t MemLoc = H << 8 | L;
+          Operand = memory.read(MemLoc);
+        } else {
+          Operand = *lookup_table[src];
+        }
+
+        uint16_t Result16 = A - Operand;
+        uint8_t Result8 = Result16 & 0xFF;
+
+        Flag_Set_ALU(Result8, Result16, Operand, A, true);
+        break;
+      }
+
+        // 1 opcode for CPI
+
+      case 0xfe: {
+        uint8_t Data = memory.read(PC);
+        PC++;
+
+        uint16_t Result16 = A - Data;
+        uint8_t Result8 = Result16 & 0xFF;
+
+        Flag_Set_ALU(Result8, Result16, Data, A, true);
+        break;
+      }
+
+      case 0x07:{
+        
+      }
+
+
+
+
     }
   }
 };
