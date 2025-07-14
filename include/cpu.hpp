@@ -162,13 +162,6 @@ class CPU {
     ANA,
     XRA,
     ORA,
-    RLC,
-    RRC,
-    RAL,
-    RAR,
-    CMA,
-    CMC,
-    STC
   };
 
   void Flag_Setting_Logical(uint8_t result, Instruction instruction) {
@@ -897,13 +890,130 @@ class CPU {
         break;
       }
 
-      case 0x07:{
-        
+      // 1 Opcode For RLC
+      case 0x07: {
+        uint8_t BitToLow = (A & 0x80) >> 7;
+        A = (A << 1) | BitToLow;
+
+        if (BitToLow) {
+          PSW |= 0x01;
+        } else {
+          PSW &= ~0x01;
+        }
+        break;
       }
 
+        // 1 Opcode For RRC
 
+      case 0x0f: {
+        uint8_t BitToHigh = A & 0x01;
+        A = (A >> 1) | (BitToHigh << 7);
 
+        if (BitToHigh) {
+          PSW |= 0x01;
+        } else {
+          PSW &= ~0x01;
+        }
+        break;
+      }
 
+        // 1 opcode for RAL
+
+      case 0x17: {
+        uint8_t CarryValue = PSW & 0x01;
+        uint8_t BitToCarry = (A & 0x80) >> 7;
+
+        A = (A << 1) | CarryValue;
+
+        if (BitToCarry) {
+          PSW |= 0x01;
+        } else {
+          PSW &= ~0x01;
+        }
+        break;
+      }
+
+        // 1 Opcode for RAR
+
+      case 0x1f: {
+        uint8_t CarryValue = PSW & 0x01;
+        uint8_t BitToCarry = A & 0x01;
+
+        A = (A >> 1) | (CarryValue << 7);
+
+        if (BitToCarry) {
+          PSW |= 0x01;
+        } else {
+          PSW &= ~0x01;
+        }
+        break;
+      }
+
+      // 1 opcode for CMA
+      case 0x2f: {
+        A = ~A & 0xff;
+        break;
+      }
+
+      // 1 opcode for CMC
+      case 0x3f: {
+        PSW ^= 0x01;
+        break;
+      }
+
+      // 1 Opcode for STC
+      case 0x37: {
+        PSW |= 0x01;
+        break;
+      }
+
+        // 1 Opcode For JMP
+
+      case 0xc3: {
+        uint8_t Lowbits = memory.read(PC);
+        uint8_t HighBits = memory.read(++PC);
+
+        uint16_t MemLoc = HighBits << 8 | Lowbits;
+
+        PC = MemLoc;
+
+        break;
+      }
+
+        // 8 opcodes For JUMP Conditions
+
+      case 0xc2:
+      case 0xD2:
+      case 0xE2:
+      case 0xf2:
+      case 0xca:
+      case 0xda:
+      case 0xea:
+      case 0xfa: {
+        uint8_t CCC = (opcode & 0x38) >> 3;
+        uint8_t LowBits = memory.read(PC);
+        uint8_t HighBits = memory.read(++PC);
+        uint16_t MemLoc = HighBits << 8 | LowBits;
+        switch (CCC) {
+          case 0x00: {
+            if ((PSW & 0x01) == 1) {
+              PC = MemLoc;
+            }
+            break;
+          }
+          case 0x01: {
+            if ((PSW & 0x01) == 0) {
+              PC = MemLoc;
+            }
+            break;
+          }
+
+          case 0x02: {
+            break;
+          }
+        }
+        break;
+      }
     }
   }
 };
