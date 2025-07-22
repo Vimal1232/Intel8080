@@ -1,19 +1,11 @@
-#include <iostream>
-#include <cpu.hpp>
 #include <Memory.hpp>
+#include <cpu.hpp>
+#include <iostream>
 
-int main()
-{
+int main() {
+  Memory mem;
+  mem.Load_ROM();
+  CPU cpu(mem);
 
-    // Memory memory;
-
-    // memory.write(0x00,0x46);
-
-    // CPU cpu(memory);
-
-    // uint8_t opcode = cpu.fetch();
-
-    // cpu.decode(opcode);
-
-    std::cout << "Frontend" << std::endl;
+  cpu.debug();
 }

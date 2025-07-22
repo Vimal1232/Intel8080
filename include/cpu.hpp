@@ -4,6 +4,7 @@
 
 #include <Memory.hpp>
 #include <cstdint>
+#include <iostream>
 
 class CPU {
  public:
@@ -22,6 +23,8 @@ class CPU {
   uint16_t PC;
   uint16_t SP;
 
+  bool Halt = false;
+
   CPU(Memory& mem) : memory(mem) {
     B = 0x0;
     C = 0x0;
@@ -31,9 +34,9 @@ class CPU {
     L = 0x0;
     A = 0x0;
 
-    PSW = 00000010;
+    PSW = 0x02;
 
-    PC = 0x0000;
+    PC = 0x0100;
     SP = 0xFFFF;
   }
 
@@ -43,7 +46,7 @@ class CPU {
     return opcode;
   }
 
-  void Flag_Set_ALU(uint8_t result8, uint16_t result16, uint8_t operand,
+  void Flag_Set_ALU(uint8_t result8, uint16_t result16, uint16_t operand,
                     uint8_t OriginalA, bool SUB = false) {
     if (SUB) {
       if ((OriginalA & 0x0F) < (operand & 0x0F)) {
@@ -52,7 +55,7 @@ class CPU {
         PSW &= ~0x10;
       }
     } else {
-      if ((OriginalA & 0x0F) + (operand & 0x0F) > 0x0F) {
+      if (((OriginalA & 0x0F) + (operand & 0x0F)) > 0x0F) {
         PSW |= 0x10;
       } else {
         PSW &= ~0x10;
@@ -69,7 +72,7 @@ class CPU {
 
     // Sign Flag
 
-    if ((result8 & 0x80) >> 7 == 0x01) {
+    if ((result8 & 0x80)) {
       PSW |= 0x80;
     } else {
       PSW &= ~0x80;
@@ -95,7 +98,7 @@ class CPU {
     // Carry Flag
 
     if (SUB) {
-      if (operand > OriginalA) {
+      if (OriginalA < (operand & 0xFF)) {
         PSW |= 0x01;
       } else {
         PSW &= ~0x01;
@@ -222,7 +225,6 @@ class CPU {
 
   void decode(uint8_t opcode) {
     uint8_t* lookup_table[8] = {&B, &C, &D, &E, &H, &L, nullptr, &A};
-
     switch (opcode) {
       // MOV Opcode + Exception of HLT
       case 0x40 ... 0x7f: {
@@ -230,7 +232,8 @@ class CPU {
         uint8_t Dest = (opcode & 0x38) >> 3;
 
         if (opcode == 0x76) {
-          std::cout << "Will implement Halt Later" << std::endl;
+          Halt = true;
+          std::cout << "CPU Halted at PC: 0x" << std::hex << PC << std::endl;
         } else {
           if (Src != 0x06 && Dest != 0x06) {
             *lookup_table[Dest] = *lookup_table[Src];
@@ -480,7 +483,7 @@ class CPU {
         uint8_t Result8 = Result16 & 0xFF;
         A = Result8;
 
-        Flag_Set_ALU(Result8, Result16, Operand + carry, originalA);
+        Flag_Set_ALU(Result8, Result16, (uint16_t)Operand + carry, originalA);
 
         break;
       }
@@ -497,7 +500,7 @@ class CPU {
         uint8_t Result8 = Result16 & 0xFF;
         A = Result8;
 
-        Flag_Set_ALU(Result8, Result16, Data + carry, originalA);
+        Flag_Set_ALU(Result8, Result16, (uint16_t)Data + carry, originalA);
 
         break;
       }
@@ -554,11 +557,12 @@ class CPU {
           Operand = *lookup_table[src];
         }
 
-        uint16_t Result16 = A - (Operand - Borrow);
+        uint16_t Result16 = A - Operand - Borrow;
         uint8_t Result8 = Result16 & 0xFF;
         A = Result8;
 
-        Flag_Set_ALU(Result8, Result16, Operand - Borrow, originalA, true);
+        Flag_Set_ALU(Result8, Result16, (uint16_t)Operand + Borrow, originalA,
+                     true);
 
         break;
       }
@@ -569,11 +573,12 @@ class CPU {
         PC++;
         uint8_t originalA = A;
         uint8_t Borrow = PSW & 0x01;
-        uint16_t Result16 = A - (Data - Borrow);
+        uint16_t Result16 = A - Data - Borrow;
         uint8_t Result8 = Result16 & 0xff;
         A = Result8;
 
-        Flag_Set_ALU(Result8, Result16, Data - Borrow, originalA, true);
+        Flag_Set_ALU(Result8, Result16, (uint16_t)Data + Borrow, originalA,
+                     true);
 
         break;
       }
@@ -604,7 +609,7 @@ class CPU {
         }
         uint8_t Result = Data + 1;
 
-        Flag_INDC(Result, AUXDATA, true);
+        Flag_INDC(Result, AUXDATA);
 
         break;
       }
@@ -650,24 +655,24 @@ class CPU {
 
         switch (RP) {
           case 0x00: {
-            uint16_t Pair = B << 8 | C;
+            uint16_t Pair = (B << 8) | C;
             Pair++;
-            C = Pair & 0xFF;
+            C = Pair & 0x00FF;
             B = (Pair & 0xFF00) >> 8;
 
             break;
           }
           case 0x01: {
-            uint16_t Pair = D << 8 | E;
+            uint16_t Pair = (D << 8) | E;
             Pair++;
-            E = Pair & 0xFF;
+            E = Pair & 0x00FF;
             D = (Pair & 0xFF00) >> 8;
             break;
           }
           case 0x02: {
-            uint16_t Pair = H << 8 | L;
+            uint16_t Pair = (H << 8) | L;
             Pair++;
-            L = Pair & 0xFF;
+            L = Pair & 0x00FF;
             H = (Pair & 0xFF00) >> 8;
             break;
           }
@@ -681,29 +686,29 @@ class CPU {
 
         // 4 Opcode for DCX
 
-      case 0x08:
-      case 0x18:
-      case 0x28:
-      case 0x38: {
+      case 0x0b:
+      case 0x1b:
+      case 0x2b:
+      case 0x3b: {
         uint8_t RP = (opcode & 0x30) >> 4;
 
         switch (RP) {
           case 0x00: {
-            uint16_t Pair = B << 8 | C;
+            uint16_t Pair = (B << 8) | C;
             Pair--;
             C = Pair & 0xFF;
             B = (Pair & 0xFF00) >> 8;
             break;
           }
           case 0x01: {
-            uint16_t Pair = D << 8 | E;
+            uint16_t Pair = (D << 8) | E;
             Pair--;
             E = Pair & 0xFF;
             D = (Pair & 0xFF00) >> 8;
             break;
           }
           case 0x02: {
-            uint16_t Pair = H << 8 | L;
+            uint16_t Pair = (H << 8) | L;
             Pair--;
             L = Pair & 0xFF;
             H = (Pair & 0xFF00) >> 8;
@@ -723,43 +728,75 @@ class CPU {
       case 0x19:
       case 0x29:
       case 0x39: {
-        uint8_t HL = H >> 8 | L;
         uint16_t RP = (opcode & 0x30) >> 4;
-        uint32_t Result;
 
         switch (RP) {
           case 0x00: {
-            uint16_t Data = B << 8 | C;
-            Result = Data + HL;
+            uint16_t Data = (B << 8) | C;
+            uint16_t HL = (H << 8) | L;
+            uint32_t Result = HL + Data;
+
+            if (Result > 0xFFFF) {
+              PSW |= 0x01;
+            } else {
+              PSW &= ~0x01;
+            }
+            uint16_t Result16 = Result & 0xffff;
+            H = (Result16 & 0xFF00) >> 8;
+            L = Result16 & 0x00FF;
+
             break;
           }
           case 0x01: {
-            uint16_t Data = D << 8 | E;
-            Result = Data + HL;
+            uint16_t Data = (D << 8) | E;
+            uint16_t HL = (H << 8) | L;
+            uint32_t Result = HL + Data;
+
+            if (Result > 0xFFFF) {
+              PSW |= 0x01;
+            } else {
+              PSW &= ~0x01;
+            }
+            uint16_t Result16 = Result & 0xffff;
+            H = (Result16 & 0xFF00) >> 8;
+            L = Result16 & 0x00FF;
 
             break;
           }
 
           case 0x02: {
-            uint16_t Data = HL;
-            Result = Data + HL;
+            uint16_t HL = (H << 8) | L;
+            uint32_t Result = HL + HL;
+            if (Result > 0xFFFF) {
+              PSW |= 0x01;
+            } else {
+              PSW &= ~0x01;
+            }
+            uint16_t Result16 = Result & 0xffff;
+            H = (Result16 & 0xFF00) >> 8;
+            L = Result16 & 0x00FF;
+
             break;
           }
 
           case 0x03: {
             uint16_t Data = SP;
-            Result = Data + HL;
+            uint16_t HL = (H << 8) | L;
+            uint32_t Result = HL + Data;
+
+            if (Result > 0xFFFF) {
+              PSW |= 0x01;
+            } else {
+              PSW &= ~0x01;
+            }
+            uint16_t Result16 = Result & 0xffff;
+            H = (Result16 & 0xFF00) >> 8;
+            L = Result16 & 0x00FF;
+
             break;
           }
         }
-        L = Result & 0xFF;
-        H = (Result & 0xFF00) >> 8;
 
-        if (Result > 0xFFFF) {
-          PSW |= 0x01;
-        } else {
-          PSW &= ~0x01;
-        }
         break;
       }
 
@@ -801,7 +838,7 @@ class CPU {
         uint8_t Src = opcode & 0x07;
         uint8_t Result;
         if (Src == 0x06) {
-          uint16_t MemLoc = H << 8 | L;
+          uint16_t MemLoc = (H << 8) | L;
           uint8_t Data = memory.read(MemLoc);
           Result = A ^ Data;
         } else {
@@ -828,12 +865,12 @@ class CPU {
 
         // 8 Opcodes for ORA
 
-      case 0xb0 ... 0x0b7: {
+      case 0xb0 ... 0xb7: {
         uint8_t Src = opcode & 0x07;
         uint8_t Result;
 
         if (Src == 0x06) {
-          uint16_t MemLoc = H << 8 | L;
+          uint16_t MemLoc = (H << 8) | L;
           uint8_t Data = memory.read(MemLoc);
           Result = A | Data;
         } else {
@@ -864,7 +901,7 @@ class CPU {
         uint8_t Operand;
 
         if (src == 0x06) {
-          uint16_t MemLoc = H << 8 | L;
+          uint16_t MemLoc = (H << 8) | L;
           Operand = memory.read(MemLoc);
         } else {
           Operand = *lookup_table[src];
@@ -968,20 +1005,9 @@ class CPU {
       }
 
         // 1 Opcode For JMP
-
-      case 0xc3: {
-        uint8_t Lowbits = memory.read(PC);
-        uint8_t HighBits = memory.read(++PC);
-
-        uint16_t MemLoc = HighBits << 8 | Lowbits;
-
-        PC = MemLoc;
-
-        break;
-      }
-
         // 8 opcodes For JUMP Conditions
 
+      case 0xc3:
       case 0xc2:
       case 0xD2:
       case 0xE2:
@@ -992,69 +1018,584 @@ class CPU {
       case 0xfa: {
         uint8_t CCC = (opcode & 0x38) >> 3;
         uint8_t LowBits = memory.read(PC);
-        uint8_t HighBits = memory.read(++PC);
-        uint16_t MemLoc = HighBits << 8 | LowBits;
-        switch (CCC) {
-          case 0x00: {
-            if ((PSW & 0x40) == 0) {
-              PC = MemLoc;
-            }
-            break;
-          }
+        uint8_t HighBits = memory.read(PC + 1);
+        uint16_t MemLoc = (HighBits << 8) | LowBits;
 
-          case 0x01: {
-            if ((PSW & 0x40) != 0) {
-              PC = MemLoc;
-            }
-            break;
-          }
-          case 0x02: {
-            if ((PSW & 0x01) == 0) {
-              PC = MemLoc;
-            }
-            break;
-          }
-          case 0x03: {
-            if ((PSW & 0x01) != 0) {
-              PC = MemLoc;
-            }
-            break;
-          }
-
-          case 0x04: {
-            if ((PSW & 0x04) == 0) {
-              PC = MemLoc;
-            }
-
-            break;
-          }
-          case 0x05: {
-            if ((PSW & 0x04) != 0) {
-              PC = MemLoc;
-            }
-            break;
-          }
-
-          case 0x06: {
-            if ((PSW & 0x80) == 0) {
-              PC = MemLoc;
+        if (opcode == 0xc3) {
+          PC = MemLoc;
+        } else {
+          switch (CCC) {
+            case 0x00: {
+              if ((PSW & 0x40) == 0) {
+                PC = MemLoc;
+              } else {
+                PC += 2;
+              }
               break;
             }
-          }
-          case 0x07: {
-            if ((PSW & 0x80) != 0) {
-              PC = MemLoc;
+
+            case 0x01: {
+              if ((PSW & 0x40) != 0) {
+                PC = MemLoc;
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+            case 0x02: {
+              if ((PSW & 0x01) == 0) {
+                PC = MemLoc;
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+            case 0x03: {
+              if ((PSW & 0x01) != 0) {
+                PC = MemLoc;
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+
+            case 0x04: {
+              if ((PSW & 0x04) == 0) {
+                PC = MemLoc;
+              } else {
+                PC += 2;
+              }
+
+              break;
+            }
+            case 0x05: {
+              if ((PSW & 0x04) != 0) {
+                PC = MemLoc;
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+
+            case 0x06: {
+              if ((PSW & 0x80) == 0) {
+                PC = MemLoc;
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+            case 0x07: {
+              if ((PSW & 0x80) != 0) {
+                PC = MemLoc;
+              } else {
+                PC += 2;
+              }
               break;
             }
           }
         }
         break;
       }
-      
 
+        // 1 Opcode for CALL
+        // 8 Opcodes for Condition CALLs
 
+      case 0xcd:
+      case 0xcc:
+      case 0xdc:
+      case 0xec:
+      case 0xfc:
+      case 0xc4:
+      case 0xd4:
+      case 0xe4:
+      case 0xf4: {
+        uint8_t CCC = (opcode & 0x38) >> 3;
 
+        uint8_t LowerBit = memory.read(PC);
+        uint8_t HigherBit = memory.read(PC + 1);
+        uint16_t MemLoc = (HigherBit << 8) | LowerBit;
 
+        uint16_t ProgramUpgrade = PC + 2;
+
+        uint8_t LowOrderBit = ProgramUpgrade & 0x00FF;
+        uint8_t HighOrderBit = (ProgramUpgrade & 0xFF00) >> 8;
+        if (opcode == 0xcd) {
+          PC = MemLoc;
+          SP--;
+          memory.write(SP, HighOrderBit);
+          SP--;
+          memory.write(SP, LowOrderBit);
+
+        } else {
+          switch (CCC) {
+            case 0x00: {
+              if ((PSW & 0x40) == 0) {
+                PC = MemLoc;
+                SP--;
+                memory.write(SP, HighOrderBit);
+                SP--;
+                memory.write(SP, LowOrderBit);
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+
+            case 0x01: {
+              if ((PSW & 0x40) != 0) {
+                PC = MemLoc;
+                SP--;
+                memory.write(SP, HighOrderBit);
+                SP--;
+                memory.write(SP, LowOrderBit);
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+            case 0x02: {
+              if ((PSW & 0x01) == 0) {
+                PC = MemLoc;
+                SP--;
+                memory.write(SP, HighOrderBit);
+                SP--;
+                memory.write(SP, LowOrderBit);
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+            case 0x03: {
+              if ((PSW & 0x01) != 0) {
+                PC = MemLoc;
+                SP--;
+                memory.write(SP, HighOrderBit);
+                SP--;
+                memory.write(SP, LowOrderBit);
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+
+            case 0x04: {
+              if ((PSW & 0x04) == 0) {
+                PC = MemLoc;
+                SP--;
+                memory.write(SP, HighOrderBit);
+                SP--;
+                memory.write(SP, LowOrderBit);
+              } else {
+                PC += 2;
+              }
+
+              break;
+            }
+            case 0x05: {
+              if ((PSW & 0x04) != 0) {
+                PC = MemLoc;
+                SP--;
+                memory.write(SP, HighOrderBit);
+                SP--;
+                memory.write(SP, LowOrderBit);
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+
+            case 0x06: {
+              if ((PSW & 0x80) == 0) {
+                PC = MemLoc;
+                SP--;
+                memory.write(SP, HighOrderBit);
+                SP--;
+                memory.write(SP, LowOrderBit);
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+            case 0x07: {
+              if ((PSW & 0x80) != 0) {
+                PC = MemLoc;
+                SP--;
+                memory.write(SP, HighOrderBit);
+                SP--;
+                memory.write(SP, LowOrderBit);
+              } else {
+                PC += 2;
+              }
+              break;
+            }
+          }
+        }
+
+        break;
+      }
+
+        // 1 Opcode for RET
+        // 8 Opcodes For RET Conditions
+
+      case 0xc9:
+      case 0xc8:
+      case 0xd8:
+      case 0xe8:
+      case 0xf8:
+      case 0xc0:
+      case 0xd0:
+      case 0xe0:
+      case 0xf0: {
+        uint8_t CCC = (opcode & 0x38) >> 3;
+
+        uint8_t LowOrderBit = memory.read(SP);
+        uint8_t HighOrderBit = memory.read(SP + 1);
+        uint16_t MemLoc = (HighOrderBit << 8) | LowOrderBit;
+
+        if (opcode == 0xc9) {
+          PC = MemLoc;
+          SP += 2;
+
+        } else {
+          switch (CCC) {
+            case 0x00: {
+              if ((PSW & 0x40) == 0) {
+                PC = MemLoc;
+                SP += 2;
+              }
+              break;
+            }
+
+            case 0x01: {
+              if ((PSW & 0x40) != 0) {
+                PC = MemLoc;
+                SP += 2;
+              }
+              break;
+            }
+            case 0x02: {
+              if ((PSW & 0x01) == 0) {
+                PC = MemLoc;
+                SP += 2;
+              }
+              break;
+            }
+            case 0x03: {
+              if ((PSW & 0x01) != 0) {
+                PC = MemLoc;
+                SP += 2;
+              }
+              break;
+            }
+
+            case 0x04: {
+              if ((PSW & 0x04) == 0) {
+                PC = MemLoc;
+                SP += 2;
+              }
+
+              break;
+            }
+            case 0x05: {
+              if ((PSW & 0x04) != 0) {
+                PC = MemLoc;
+                SP += 2;
+              }
+              break;
+            }
+
+            case 0x06: {
+              if ((PSW & 0x80) == 0) {
+                PC = MemLoc;
+                SP += 2;
+              }
+              break;
+            }
+            case 0x07: {
+              if ((PSW & 0x80) != 0) {
+                PC = MemLoc;
+                SP += 2;
+              }
+              break;
+            }
+          }
+        }
+
+        break;
+      }
+
+        // 8 opcodes For RST
+
+      case 0xc7:
+      case 0xd7:
+      case 0xe7:
+      case 0xf7:
+      case 0xcf:
+      case 0xdf:
+      case 0xef:
+      case 0xff: {
+        uint16_t ProgramUpdgrade = PC;
+        uint8_t Lowbits = ProgramUpdgrade & 0xFF;
+        uint8_t HighBits = (ProgramUpdgrade & 0xFF00) >> 8;
+
+        uint8_t NNN = (opcode & 0x38) >> 3;
+
+        memory.write(SP - 1, HighBits);
+        memory.write(SP - 2, Lowbits);
+
+        SP -= 2;
+
+        PC = 8 * NNN;
+
+        break;
+      }
+
+      case 0xe9: {
+        PC = H << 8 | L;
+
+        break;
+      }
+
+        // 3  opcodes FOR PUSH register Pairs
+
+      case 0xc5:
+      case 0xd5:
+      case 0xe5: {
+        uint8_t RP = (opcode & 0x30) >> 4;
+
+        switch (RP) {
+          case 0x00: {
+            SP--;
+            memory.write(SP, B);
+            SP--;
+            memory.write(SP, C);
+
+            break;
+          }
+          case 0x01: {
+            SP--;
+            memory.write(SP, D);
+            SP--;
+            memory.write(SP, E);
+
+            break;
+          }
+
+          case 0x02: {
+            SP--;
+            memory.write(SP, H);
+            SP--;
+            memory.write(SP, L);
+
+            break;
+          }
+        }
+        break;
+      }
+
+        // PUSH For PSW
+
+      case 0xf5: {
+        SP--;
+        memory.write(SP, A);
+        SP--;
+        memory.write(SP, PSW);
+
+        break;
+      }
+
+        // POP for RPs
+
+      case 0xc1:
+      case 0xd1:
+      case 0xe1: {
+        uint8_t RP = (opcode & 0x30) >> 4;
+
+        switch (RP) {
+          case 0x00: {
+            C = memory.read(SP);
+            SP++;
+            B = memory.read(SP);
+            SP++;
+            break;
+          }
+          case 0x1: {
+            E = memory.read(SP);
+            SP++;
+            D = memory.read(SP);
+            SP++;
+            break;
+          }
+          case 0x2: {
+            L = memory.read(SP);
+            SP++;
+            H = memory.read(SP);
+            SP++;
+
+            break;
+          }
+        }
+
+        break;
+      }
+
+        // POP for PSW
+
+      case 0xf1: {
+        PSW = memory.read(SP);
+        SP++;
+        A = memory.read(SP);
+        SP++;
+        break;
+      }
+
+        // XTHL
+
+      case 0xe3: {
+        uint8_t temp = memory.read(SP);
+        uint8_t tempH = memory.read(SP + 1);
+
+        memory.write(SP, L);
+        memory.write(SP + 1, H);
+
+        L = temp;
+        H = tempH;
+
+        break;
+      }
+
+        // SPHL
+
+      case 0xf9: {
+        SP = (H << 8) | L;
+        break;
+      }
+
+      case 0x00: {
+        break;
+      }
+
+      case 0xdb: {
+        uint8_t port = memory.read(PC);
+        PC++;
+
+        if (port == 0x00 || port == 0x01) {
+          A = 0xFF;
+        } else {
+          A = 0x00;
+        }
+        break;
+      }
+
+      case 0xd3: {
+        uint8_t port = memory.read(PC);
+        uint8_t data = A;
+        PC++;
+        if (port == 0x00 || port == 0x01) {
+          if (data >= 32 && data <= 126) {
+            std::cout << static_cast<char>(data);
+          } else if (data == 13) {
+            std::cout << '\n';
+          } else if (data == 10) {
+            std::cout << '\n';
+          }
+          std::cout.flush();
+        }
+        break;
+      }
     }
+  }
+
+  void handle_BDOS_call() {
+    uint8_t function = C;
+    switch (function) {
+      case 2: {
+        char ch = static_cast<char>(E);
+        if (ch >= 32 && ch <= 126) {
+          std::cout << ch;
+        } else if (ch == 13 || ch == 10) {
+          std::cout << '\n';
+        }
+        std::cout.flush();
+        break;
+      }
+      case 9: {
+        uint16_t addr = (D << 8) | E;
+        char ch;
+        while ((ch = memory.read(addr)) != '$') {
+          if (ch >= 32 && ch <= 126) {
+            std::cout << ch;
+          } else if (ch == 13 || ch == 10) {
+            std::cout << '\n';
+          }
+          addr++;
+        }
+        std::cout.flush();
+        break;
+      }
+      default:
+        break;
+    }
+
+    // Return from BDOS call
+    uint8_t low = memory.read(SP);
+    uint8_t high = memory.read(SP + 1);
+    PC = (high << 8) | low;
+    SP += 2;
+  }
+
+  void cycle() {
+    if (PC == 0x0005) {
+      handle_BDOS_call();
+      return;
+    }
+    uint8_t opcode = fetch();
+    decode(opcode);
+  }
+
+  void run() {
+    int count = 0;
+    while (!Halt) {
+      cycle();
+      count++;
+    }
+  }
+
+  void debug() {
+    int count = 0;
+    std::cout << "Starting CPU execution from PC: 0x" << std::hex << PC
+              << std::endl;
+
+    while (!Halt) {
+      uint8_t opcode = memory.read(PC);
+
+      // More comprehensive debugging
+      if (count < 50 || (count % 10000 == 0)) {
+        std::cout << " PC: 0x" << std::hex << PC << " Opcode: 0x" << std::hex
+                  << (int)opcode << " A=0x" << (int)A << " SP=0x" << SP
+                  << " PSW=0x" << (int)PSW << std::endl;
+      }
+
+      // Check for potential infinite loops
+      if (PC == 0x0005) {
+        std::cout << "BDOS call - Function: " << (int)C << " D=0x" << (int)D
+                  << " E=0x" << (int)E << std::endl;
+      }
+
+      cycle();
+      count++;
+
+      // Reduced limit for debugging
+      if (count > 10000) {
+        std::cout
+            << "Execution limit reached - possible infinite loop at PC: 0x"
+            << std::hex << PC << std::endl;
+        Halt = true;
+        break;
+      }
+    }
+
+    std::cout << "CPU halted after " << count << " instructions" << std::endl;
   }
 };
