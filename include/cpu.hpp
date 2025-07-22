@@ -1576,14 +1576,14 @@ class CPU {
   }
 
   void handle_BDOS_call() {
-    uint8_t low = memory.read(SP);
-    uint8_t high = memory.read(SP + 1);
-    uint16_t MemLoc = (high << 8) | low;
-    if (MemLoc == 0x00) {
-      Halt = true;
-    }
     uint8_t function = C;
     switch (function) {
+      case 0: {
+        std::cout << "BDOS Function 0: Program termination requested"
+                  << std::endl;
+        Halt = true;
+        return;
+      }
       case 2: {
         char ch = static_cast<char>(E);
         if (ch >= 32 && ch <= 126) {
@@ -1612,6 +1612,13 @@ class CPU {
         break;
       }
     }
+    uint8_t low = memory.read(SP);
+    uint8_t high = memory.read(SP + 1);
+    uint16_t MemLoc = (high << 8) | low;
+    if (MemLoc == 0x00) {
+      Halt = true;
+      return;
+    }
     PC = MemLoc;
     SP += 2;
   }
@@ -1621,6 +1628,7 @@ class CPU {
       handle_BDOS_call();
       return;
     }
+
     uint8_t opcode = fetch();
 
     decode(opcode);
