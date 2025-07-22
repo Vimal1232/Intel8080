@@ -7,5 +7,5 @@ int main() {
   mem.Load_ROM();
   CPU cpu(mem);
 
-  cpu.debug();
+  cpu.run();
 }

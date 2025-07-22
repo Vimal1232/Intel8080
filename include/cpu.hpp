@@ -4,6 +4,8 @@
 
 #include <Memory.hpp>
 #include <cstdint>
+#include <iomanip>
+#include <ios>
 #include <iostream>
 
 class CPU {
@@ -98,7 +100,7 @@ class CPU {
     // Carry Flag
 
     if (SUB) {
-      if (OriginalA < (operand & 0xFF)) {
+      if (OriginalA < operand) {
         PSW |= 0x01;
       } else {
         PSW &= ~0x01;
@@ -235,14 +237,19 @@ class CPU {
           Halt = true;
           std::cout << "CPU Halted at PC: 0x" << std::hex << PC << std::endl;
         } else {
-          if (Src != 0x06 && Dest != 0x06) {
-            *lookup_table[Dest] = *lookup_table[Src];
+          if (Dest == 0x06) {
+            uint16_t MemLoc = (H << 8) | L;
+            if (Src == 0x06) {
+              Halt = true;
+              std::cout << "CPU HALTED" << std::endl;
+            } else {
+              memory.write(MemLoc, *lookup_table[Src]);
+            }
           } else if (Src == 0x06) {
-            uint16_t HL = (static_cast<uint16_t>(H) << 8) | L;
-            *lookup_table[Dest] = memory.read(HL);
-          } else if (Dest == 0x06) {
-            uint16_t HL = (static_cast<uint16_t>(H) << 8) | L;
-            memory.write(HL, *lookup_table[Src]);
+            uint16_t MemLoc = (H << 8) | L;
+            *lookup_table[Dest] = memory.read(MemLoc);
+          } else {
+            *lookup_table[Dest] = *lookup_table[Src];
           }
         }
 
@@ -655,25 +662,28 @@ class CPU {
 
         switch (RP) {
           case 0x00: {
-            uint16_t Pair = (B << 8) | C;
-            Pair++;
-            C = Pair & 0x00FF;
-            B = (Pair & 0xFF00) >> 8;
+            uint16_t BC = (B << 8) | C;
+            BC++;
+            B = (BC & 0xFF00) >> 8;
+            C = BC & 0x00FF;
+            break;
 
             break;
           }
           case 0x01: {
-            uint16_t Pair = (D << 8) | E;
-            Pair++;
-            E = Pair & 0x00FF;
-            D = (Pair & 0xFF00) >> 8;
+            uint16_t DE = (D << 8) | E;
+            DE++;
+            D = (DE & 0xFF00) >> 8;
+            E = DE & 0x00FF;
+            break;
+
             break;
           }
           case 0x02: {
-            uint16_t Pair = (H << 8) | L;
-            Pair++;
-            L = Pair & 0x00FF;
-            H = (Pair & 0xFF00) >> 8;
+            uint16_t HL = (H << 8) | L;
+            HL++;
+            H = (HL & 0xFF00) >> 8;
+            L = HL & 0x00FF;
             break;
           }
           case 0x03: {
@@ -694,24 +704,24 @@ class CPU {
 
         switch (RP) {
           case 0x00: {
-            uint16_t Pair = (B << 8) | C;
-            Pair--;
-            C = Pair & 0xFF;
-            B = (Pair & 0xFF00) >> 8;
+            uint16_t BC = (B << 8) | C;
+            BC--;
+            B = (BC & 0xFF00) >> 8;
+            C = BC & 0x00FF;
             break;
           }
           case 0x01: {
-            uint16_t Pair = (D << 8) | E;
-            Pair--;
-            E = Pair & 0xFF;
-            D = (Pair & 0xFF00) >> 8;
+            uint16_t DE = (D << 8) | E;
+            DE--;
+            D = (DE & 0xFF00) >> 8;
+            E = DE & 0x00FF;
             break;
           }
           case 0x02: {
-            uint16_t Pair = (H << 8) | L;
-            Pair--;
-            L = Pair & 0xFF;
-            H = (Pair & 0xFF00) >> 8;
+            uint16_t HL = (H << 8) | L;
+            HL--;
+            H = (HL & 0xFF00) >> 8;
+            L = HL & 0x00FF;
             break;
           }
           case 0x03: {
@@ -1504,10 +1514,74 @@ class CPU {
         }
         break;
       }
+        // Case DAA;
+
+      case 0x27: {
+        uint8_t correction = 0;
+        bool carry = false;
+        if ((A & 0x0F) > 9 || (PSW & 0x10)) {
+          correction += 0x06;
+        }
+        if (((A & 0xF0) >> 4) > 9 || (PSW & 0x01) ||
+            (((A & 0xF0) >> 4) >= 9 && (A & 0x0F) > 9)) {
+          correction += 0x60;
+          carry = true;
+        }
+        uint8_t originalA = A;
+        A += correction;
+
+        if (((originalA & 0x0F) + (correction & 0x0F)) > 0x0F) {
+          PSW |= 0x10;
+        } else {
+          PSW &= ~0x10;
+        }
+
+        if (carry) {
+          PSW |= 0x01;
+        } else {
+          PSW &= ~0x01;
+        }
+        if (A == 0) {
+          PSW |= 0x40;
+        } else {
+          PSW &= ~0x40;
+        }
+        if (A & 0x80) {
+          PSW |= 0x80;
+        } else {
+          PSW &= ~0x80;
+        }
+        int count = 0;
+        uint8_t temp = A;
+        for (int i = 0; i < 8; i++) {
+          if (temp & 1) count++;
+          temp >>= 1;
+        }
+        if (count % 2 == 0) {
+          PSW |= 0x04;
+        } else {
+          PSW &= ~0x04;
+        }
+
+        break;
+      }
+
+      default: {
+        std::cout << "Unknown Opcode: 0x" << std::hex << std::setfill('0')
+                  << std::setw(2) << static_cast<int>(opcode) << " at PC: 0x"
+                  << std::setw(4) << (PC - 1) << std::dec << "\n";
+        break;
+      }
     }
   }
 
   void handle_BDOS_call() {
+    uint8_t low = memory.read(SP);
+    uint8_t high = memory.read(SP + 1);
+    uint16_t MemLoc = (high << 8) | low;
+    if (MemLoc == 0x00) {
+      Halt = true;
+    }
     uint8_t function = C;
     switch (function) {
       case 2: {
@@ -1534,14 +1608,11 @@ class CPU {
         std::cout.flush();
         break;
       }
-      default:
+      default: {
         break;
+      }
     }
-
-    // Return from BDOS call
-    uint8_t low = memory.read(SP);
-    uint8_t high = memory.read(SP + 1);
-    PC = (high << 8) | low;
+    PC = MemLoc;
     SP += 2;
   }
 
@@ -1551,51 +1622,13 @@ class CPU {
       return;
     }
     uint8_t opcode = fetch();
+
     decode(opcode);
   }
 
   void run() {
-    int count = 0;
     while (!Halt) {
       cycle();
-      count++;
     }
-  }
-
-  void debug() {
-    int count = 0;
-    std::cout << "Starting CPU execution from PC: 0x" << std::hex << PC
-              << std::endl;
-
-    while (!Halt) {
-      uint8_t opcode = memory.read(PC);
-
-      // More comprehensive debugging
-      if (count < 50 || (count % 10000 == 0)) {
-        std::cout << " PC: 0x" << std::hex << PC << " Opcode: 0x" << std::hex
-                  << (int)opcode << " A=0x" << (int)A << " SP=0x" << SP
-                  << " PSW=0x" << (int)PSW << std::endl;
-      }
-
-      // Check for potential infinite loops
-      if (PC == 0x0005) {
-        std::cout << "BDOS call - Function: " << (int)C << " D=0x" << (int)D
-                  << " E=0x" << (int)E << std::endl;
-      }
-
-      cycle();
-      count++;
-
-      // Reduced limit for debugging
-      if (count > 10000) {
-        std::cout
-            << "Execution limit reached - possible infinite loop at PC: 0x"
-            << std::hex << PC << std::endl;
-        Halt = true;
-        break;
-      }
-    }
-
-    std::cout << "CPU halted after " << count << " instructions" << std::endl;
   }
 };

@@ -19,7 +19,7 @@ class Memory {
   void write(uint16_t address, uint8_t value) { mem[address] = value; }
 
   void Load_ROM() {
-    std::ifstream file("../cpudiag.bin", std::ios::binary);
+    std::ifstream file("../TST8080.COM", std::ios::binary);
 
     if (!file) {
       std::cout << "Can't Open File" << std::endl;
