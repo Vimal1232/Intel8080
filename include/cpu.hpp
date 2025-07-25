@@ -25,7 +25,16 @@ class CPU {
   uint16_t PC;
   uint16_t SP;
 
+  uint16_t shiftRegister;
+  uint8_t shiftAmount;
+
+  bool credit, p1start, P2start, p1shot, p2shot, p1left, p1right, p2left,
+      p2right, fire, left, right, tilt;
+
+  uint8_t dipSwitches = 0x0E;
+
   bool Halt = false;
+  bool intrruptsEn = true;
 
   CPU(Memory& mem) : memory(mem) {
     B = 0x0;
@@ -38,8 +47,23 @@ class CPU {
 
     PSW = 0x02;
 
-    PC = 0x0100;
-    SP = 0xFFFF;
+    PC = 0x0000;
+    SP = 0x2400;
+    shiftRegister = 0;
+    shiftAmount = 0;
+    credit = false;
+    p1start = false;
+    P2start = false;
+    p1shot = false;
+    p2shot = false;
+    p1left = false;
+    p1right = false;
+    p2left = false;
+    p2right = false;
+    fire = false;
+    left = false;
+    right = false;
+    tilt = false;
   }
 
   uint8_t fetch() {
@@ -1018,6 +1042,7 @@ class CPU {
         // 8 opcodes For JUMP Conditions
 
       case 0xc3:
+      case 0xcb:
       case 0xc2:
       case 0xD2:
       case 0xE2:
@@ -1031,7 +1056,7 @@ class CPU {
         uint8_t HighBits = memory.read(PC + 1);
         uint16_t MemLoc = (HighBits << 8) | LowBits;
 
-        if (opcode == 0xc3) {
+        if (opcode == 0xc3 || opcode == 0xcb) {
           PC = MemLoc;
         } else {
           switch (CCC) {
@@ -1108,10 +1133,16 @@ class CPU {
         break;
       }
 
+      case 0x38: {
+        break;
+      }
+
         // 1 Opcode for CALL
         // 8 Opcodes for Condition CALLs
 
       case 0xcd:
+      case 0xed:
+      case 0xfd:
       case 0xcc:
       case 0xdc:
       case 0xec:
@@ -1130,7 +1161,7 @@ class CPU {
 
         uint8_t LowOrderBit = ProgramUpgrade & 0x00FF;
         uint8_t HighOrderBit = (ProgramUpgrade & 0xFF00) >> 8;
-        if (opcode == 0xcd) {
+        if (opcode == 0xcd || opcode == 0xfd || opcode == 0xed) {
           PC = MemLoc;
           SP--;
           memory.write(SP, HighOrderBit);
@@ -1249,6 +1280,7 @@ class CPU {
         // 8 Opcodes For RET Conditions
 
       case 0xc9:
+      case 0xd9:
       case 0xc8:
       case 0xd8:
       case 0xe8:
@@ -1263,7 +1295,7 @@ class CPU {
         uint8_t HighOrderBit = memory.read(SP + 1);
         uint16_t MemLoc = (HighOrderBit << 8) | LowOrderBit;
 
-        if (opcode == 0xc9) {
+        if (opcode == 0xc9 || opcode == 0xd9) {
           PC = MemLoc;
           SP += 2;
 
@@ -1350,11 +1382,10 @@ class CPU {
         uint8_t HighBits = (ProgramUpdgrade & 0xFF00) >> 8;
 
         uint8_t NNN = (opcode & 0x38) >> 3;
-
-        memory.write(SP - 1, HighBits);
-        memory.write(SP - 2, Lowbits);
-
-        SP -= 2;
+        SP--;
+        memory.write(SP, Lowbits);
+        SP--;
+        memory.write(SP, HighBits);
 
         PC = 8 * NNN;
 
@@ -1486,32 +1517,78 @@ class CPU {
         break;
       }
 
+        // IN
+
       case 0xdb: {
         uint8_t port = memory.read(PC);
-        PC++;
 
-        if (port == 0x00 || port == 0x01) {
-          A = 0xFF;
-        } else {
-          A = 0x00;
+        switch (port) {
+          case 0x00: {
+            A = 0x0E;
+            if (fire) A |= 0x10;
+            if (left) A |= 0x20;
+            if (right) A |= 0x40;
+            break;
+          }
+          case 0x01: {
+            A = 0x08;
+            if (credit) A |= 0x01;
+            if (P2start) A |= 0x02;
+            if (p1start) A |= 0x04;
+            if (p1shot) A |= 0x10;
+            if (p1left) A |= 0x20;
+            if (p1right) A |= 0x40;
+            break;
+          }
+          case 0x02: {
+            A = dipSwitches & 0x03;
+            if (tilt) A |= 0x04;
+            A |= (dipSwitches & 0x08);
+            if (p2shot) A |= 0x10;
+            if (p2left) A |= 0x20;
+            if (p2right) A |= 0x40;
+            A |= (dipSwitches & 0x80);
+            break;
+          }
+
+          case 0x03: {
+            A = (shiftRegister >> (8 - shiftAmount)) & 0xFF;
+            break;
+          }
         }
+
+        PC++;
         break;
       }
 
+        // OUT
+
       case 0xd3: {
         uint8_t port = memory.read(PC);
-        uint8_t data = A;
-        PC++;
-        if (port == 0x00 || port == 0x01) {
-          if (data >= 32 && data <= 126) {
-            std::cout << static_cast<char>(data);
-          } else if (data == 13) {
-            std::cout << '\n';
-          } else if (data == 10) {
-            std::cout << '\n';
+
+        switch (port) {
+          case 0x02: {
+            shiftAmount = A & 0x07;
+            break;
           }
-          std::cout.flush();
+          case 0x03: {
+            break;
+          }
+
+          case 0x04: {
+            shiftRegister = (A << 8) | (shiftRegister >> 8);
+            break;
+          }
+          case 0x05: {
+            break;
+          }
+
+          case 0x06: {
+            break;
+          }
         }
+
+        PC++;
         break;
       }
         // Case DAA;
@@ -1566,6 +1643,37 @@ class CPU {
         break;
       }
 
+      case 0xf3: {
+        intrruptsEn = false;
+        break;
+      }
+
+      case 0xfb: {
+        intrruptsEn = true;
+        break;
+      }
+
+      case 0x10: {
+        break;
+      }
+
+      case 0x18: {
+        break;
+      }
+      case 0x08: {
+        break;
+      }
+      case 0x30: {
+        break;
+      }
+      case 0x28: {
+        break;
+      }
+
+      case 0x20: {
+        break;
+      }
+
       default: {
         std::cout << "Unknown Opcode: 0x" << std::hex << std::setfill('0')
                   << std::setw(2) << static_cast<int>(opcode) << " at PC: 0x"
@@ -1575,62 +1683,21 @@ class CPU {
     }
   }
 
-  void handle_BDOS_call() {
-    uint8_t function = C;
-    switch (function) {
-      case 0: {
-        std::cout << "BDOS Function 0: Program termination requested"
-                  << std::endl;
-        Halt = true;
-        return;
-      }
-      case 2: {
-        char ch = static_cast<char>(E);
-        if (ch >= 32 && ch <= 126) {
-          std::cout << ch;
-        } else if (ch == 13 || ch == 10) {
-          std::cout << '\n';
-        }
-        std::cout.flush();
-        break;
-      }
-      case 9: {
-        uint16_t addr = (D << 8) | E;
-        char ch;
-        while ((ch = memory.read(addr)) != '$') {
-          if (ch >= 32 && ch <= 126) {
-            std::cout << ch;
-          } else if (ch == 13 || ch == 10) {
-            std::cout << '\n';
-          }
-          addr++;
-        }
-        std::cout.flush();
-        break;
-      }
-      default: {
-        break;
-      }
-    }
-    uint8_t low = memory.read(SP);
-    uint8_t high = memory.read(SP + 1);
-    uint16_t MemLoc = (high << 8) | low;
-    if (MemLoc == 0x00) {
-      Halt = true;
-      return;
-    }
-    PC = MemLoc;
-    SP += 2;
+  void interrupt(uint8_t rst_opcode) {
+    intrruptsEn = false;
+    Halt = false;
+    SP--;
+    memory.write(SP, PC & 0xFF);
+    SP--;
+    memory.write(SP, (PC >> 8) & 0xFF);
+    PC = rst_opcode;
   }
 
   void cycle() {
-    if (PC == 0x0005) {
-      handle_BDOS_call();
+    if (Halt) {
       return;
     }
-
     uint8_t opcode = fetch();
-
     decode(opcode);
   }
 
