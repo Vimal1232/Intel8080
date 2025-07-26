@@ -1528,6 +1528,7 @@ class CPU {
         uint8_t port = memory.read(PC);
         PC++;
         IN(port);
+        break;
       }
 
         // OUT
