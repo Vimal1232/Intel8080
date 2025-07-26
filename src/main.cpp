@@ -140,10 +140,6 @@ int main() {
             cpu.p1shot = true;
             printf("Key Down: SPACE (fire)\n");
             break;
-          case SDLK_E:
-            cpu.intrruptsEn = true;
-            printf("Interrupts force-enabled\n");
-            break;
 
           case SDLK_LEFT:
             cpu.left = true;
