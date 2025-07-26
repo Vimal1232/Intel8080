@@ -26,12 +26,12 @@ class Memory {
     std::ifstream file3("../invaders.f", std::ios::binary);
     std::ifstream file4("../invaders.e", std::ios::binary);
 
-    if (!file) {
+    if (!file | !file2 | !file3 | !file4) {
       std::cout << "Can't Open File" << std::endl;
       return;
     }
-    uint16_t addressH = 0x00;
-    uint16_t addressG = 0x800;
+    uint16_t addressH = 0x0000;
+    uint16_t addressG = 0x0800;
     uint16_t addressF = 0x1000;
     uint16_t addressE = 0x1800;
     uint8_t byte;
@@ -53,6 +53,5 @@ class Memory {
     std::cout << "ROM Loading Done" << std::endl;
     // std::cout << "The Last Address" << std::hex << "0x" << addressF
     //           << std::endl;
-    std::cout << "VRAM from 2400 - 3FFF" << std::endl;
   }
 };

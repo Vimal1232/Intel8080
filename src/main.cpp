@@ -61,7 +61,7 @@ void UpdateWindow(Memory &mem) {
 
   for (int y = 0; y < SCREEN_HEIGHT; y++) {
     for (int x = 0; x < SCREEN_WIDTH; x++) {
-      int byteIndex = ((x * SCREEN_HEIGHT) + y) / 8;
+      int byteIndex = (x * SCREEN_HEIGHT + y) / 8;
       int bit = y % 8;
       uint8_t byte = mem.read(vram + byteIndex);
       bool On = (byte >> bit) & 1;
@@ -89,31 +89,112 @@ int main() {
 
   bool quit = false;
   int interrupt_toggle = 0;
-
+  int cycles_per_frame = 33333;
   while (!quit) {
-    uint32_t frameStart = SDL_GetTicks();
+    uint32_t frame_start = SDL_GetTicks();
 
-    for (int i = 0; i < 33333; i++) {
-      cpu.cycle();
+    for (int i = 0; i < cycles_per_frame / 2; i++) {
+      if (!cpu.Halt) {
+        cpu.cycle();
+      }
     }
 
-    if (cpu.intrruptsEn) {
-      if (interrupt_toggle == 0) {
-        cpu.interrupt(0xCF);
-      } else {
-        cpu.interrupt(0xD7);
+    if (cpu.intrruptsEn && !cpu.Halt) {
+      cpu.interrupt(0xCF);
+    }
+    for (int i = 0; i < cycles_per_frame / 2; i++) {
+      if (!cpu.Halt) {
+        cpu.cycle();
       }
-      interrupt_toggle ^= 1;
+    }
+
+    if (cpu.intrruptsEn && !cpu.Halt) {
+      cpu.interrupt(0xD7);
     }
 
     UpdateWindow(mem);
+
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
       if (e.type == SDL_EVENT_QUIT) {
         quit = true;
+        printf("Quit event received\n");
+      }
+
+      if (e.type == SDL_EVENT_KEY_DOWN) {
+        switch (e.key.key) {
+          case SDLK_C:
+            cpu.credit = true;
+            printf("Key Down: C (credit)\n");
+            break;
+          case SDLK_1:
+            cpu.p1start = true;
+            printf("Key Down: 1 (p1start)\n");
+            break;
+          case SDLK_2:
+            cpu.P2start = true;
+            printf("Key Down: 2 (p2start)\n");
+            break;
+          case SDLK_SPACE:
+            cpu.fire = true;
+            cpu.p1shot = true;
+            printf("Key Down: SPACE (fire)\n");
+            break;
+          case SDLK_E:
+            cpu.intrruptsEn = true;
+            printf("Interrupts force-enabled\n");
+            break;
+
+          case SDLK_LEFT:
+            cpu.left = true;
+            cpu.p1left = true;
+            printf("Key Down: LEFT (left, p1left)\n");
+            break;
+
+          case SDLK_RIGHT:
+            cpu.right = true;
+            cpu.p1right = true;
+            printf("Key Down: RIGHT (right, p1right)\n");
+            break;
+        }
+      }
+
+      if (e.type == SDL_EVENT_KEY_UP) {
+        switch (e.key.key) {
+          case SDLK_C:
+            cpu.credit = false;
+            printf("Key Up: C (credit)\n");
+            break;
+          case SDLK_1:
+            cpu.p1start = false;
+            printf("Key Up: 1 (p1start)\n");
+            break;
+          case SDLK_2:
+            cpu.P2start = false;
+            printf("Key Up: 2 (p2start)\n");
+            break;
+          case SDLK_SPACE:
+            cpu.fire = false;
+            cpu.p1shot = false;
+            printf("Key Up: SPACE (fire, p1shot)\n");
+            break;
+          case SDLK_LEFT:
+            cpu.left = false;
+            cpu.p1left = false;
+            printf("Key Up: LEFT (left, p1left)\n");
+            break;
+          case SDLK_RIGHT:
+            cpu.right = false;
+            cpu.p1right = false;
+            printf("Key Up: RIGHT (right, p1right)\n");
+            break;
+        }
       }
     }
-    SDL_Delay(1000 / 60);
+    uint32_t frame_time = SDL_GetTicks() - frame_start;
+    if (frame_time < 16) {
+      SDL_Delay(16 - frame_time);
+    }
   }
   if (Pixels) {
     delete[] Pixels;

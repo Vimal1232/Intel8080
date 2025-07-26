@@ -1,9 +1,11 @@
 #pragma once
 #include <_types/_uint16_t.h>
 #include <_types/_uint8_t.h>
+#include <xlocale/_stdio.h>
 
 #include <Memory.hpp>
 #include <cstdint>
+#include <cstdio>
 #include <iomanip>
 #include <ios>
 #include <iostream>
@@ -31,10 +33,10 @@ class CPU {
   bool credit, p1start, P2start, p1shot, p2shot, p1left, p1right, p2left,
       p2right, fire, left, right, tilt;
 
-  uint8_t dipSwitches = 0x0E;
+  uint8_t dipSwitches;
 
-  bool Halt = false;
-  bool intrruptsEn = true;
+  bool Halt;
+  bool intrruptsEn;
 
   CPU(Memory& mem) : memory(mem) {
     B = 0x0;
@@ -64,6 +66,9 @@ class CPU {
     left = false;
     right = false;
     tilt = false;
+    dipSwitches = 0x01;
+    intrruptsEn = true;
+    Halt = false;
   }
 
   uint8_t fetch() {
@@ -1521,74 +1526,16 @@ class CPU {
 
       case 0xdb: {
         uint8_t port = memory.read(PC);
-
-        switch (port) {
-          case 0x00: {
-            A = 0x0E;
-            if (fire) A |= 0x10;
-            if (left) A |= 0x20;
-            if (right) A |= 0x40;
-            break;
-          }
-          case 0x01: {
-            A = 0x08;
-            if (credit) A |= 0x01;
-            if (P2start) A |= 0x02;
-            if (p1start) A |= 0x04;
-            if (p1shot) A |= 0x10;
-            if (p1left) A |= 0x20;
-            if (p1right) A |= 0x40;
-            break;
-          }
-          case 0x02: {
-            A = dipSwitches & 0x03;
-            if (tilt) A |= 0x04;
-            A |= (dipSwitches & 0x08);
-            if (p2shot) A |= 0x10;
-            if (p2left) A |= 0x20;
-            if (p2right) A |= 0x40;
-            A |= (dipSwitches & 0x80);
-            break;
-          }
-
-          case 0x03: {
-            A = (shiftRegister >> (8 - shiftAmount)) & 0xFF;
-            break;
-          }
-        }
-
         PC++;
-        break;
+        IN(port);
       }
 
         // OUT
 
       case 0xd3: {
         uint8_t port = memory.read(PC);
-
-        switch (port) {
-          case 0x02: {
-            shiftAmount = A & 0x07;
-            break;
-          }
-          case 0x03: {
-            break;
-          }
-
-          case 0x04: {
-            shiftRegister = (A << 8) | (shiftRegister >> 8);
-            break;
-          }
-          case 0x05: {
-            break;
-          }
-
-          case 0x06: {
-            break;
-          }
-        }
-
         PC++;
+        Out(port);
         break;
       }
         // Case DAA;
@@ -1684,13 +1631,18 @@ class CPU {
   }
 
   void interrupt(uint8_t rst_opcode) {
+    if (!intrruptsEn) return;
+
     intrruptsEn = false;
     Halt = false;
-    SP--;
-    memory.write(SP, PC & 0xFF);
+
     SP--;
     memory.write(SP, (PC >> 8) & 0xFF);
-    PC = rst_opcode;
+    SP--;
+    memory.write(SP, PC & 0xFF);
+
+    uint8_t vector = (rst_opcode & 0x38) >> 3;
+    PC = vector * 8;
   }
 
   void cycle() {
@@ -1699,6 +1651,71 @@ class CPU {
     }
     uint8_t opcode = fetch();
     decode(opcode);
+  }
+
+  void IN(uint8_t port) {
+    switch (port) {
+      case 0x00:
+        A = 0x0E;
+        if (fire) A |= 0x10;
+        if (left) A |= 0x20;
+        if (right) A |= 0x40;
+        break;
+      case 0x01:
+        A = 0x08;
+        if (credit) A |= 0x01;
+        if (P2start) A |= 0x02;
+        if (p1start) A |= 0x04;
+        if (p1shot) A |= 0x10;
+        if (p1left) A |= 0x20;
+        if (p1right) A |= 0x40;
+        break;
+      case 0x02:
+        A = dipSwitches & 0x03;
+        if (tilt) A |= 0x04;
+        A |= (dipSwitches & 0x08);
+        if (p2shot) A |= 0x10;
+        if (p2left) A |= 0x20;
+        if (p2right) A |= 0x40;
+        A |= (dipSwitches & 0x80);
+
+        break;
+      case 0x03:
+        A = (shiftRegister >> (8 - shiftAmount)) & 0xFF;
+        break;
+      default:
+        A = 0xFF;
+
+        break;
+    }
+  }
+
+  void Out(uint8_t port) {
+    switch (port) {
+      case 0x02:
+        shiftAmount = A & 0x07;
+        printf("port 02 \n");
+        break;
+      case 0x04:
+        shiftRegister = (A << 8) | (shiftRegister >> 8);
+        printf("port 04 \n");
+        break;
+      case 0x06:
+        printf("port 06 \n");
+        break;
+
+      case 0x03:
+        printf("port 03 \n");
+        break;
+
+      case 0x5:
+        printf("port 05 \n");
+        break;
+
+      default:
+
+        break;
+    }
   }
 
   void run() {
