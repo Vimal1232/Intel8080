@@ -1695,22 +1695,15 @@ class CPU {
     switch (port) {
       case 0x02:
         shiftAmount = A & 0x07;
-        printf("port 02 \n");
         break;
       case 0x04:
         shiftRegister = (A << 8) | (shiftRegister >> 8);
-        printf("port 04 \n");
         break;
       case 0x06:
-        printf("port 06 \n");
         break;
-
       case 0x03:
-        printf("port 03 \n");
         break;
-
       case 0x5:
-        printf("port 05 \n");
         break;
 
       default:

@@ -136,9 +136,10 @@ int main() {
             printf("Key Down: 2 (p2start)\n");
             break;
           case SDLK_SPACE:
-            cpu.fire = true;
+            cpu.credit = true;
             cpu.p1shot = true;
-            printf("Key Down: SPACE (fire)\n");
+            cpu.fire = true;
+            printf("Key Down: SPACE (fire) (P1 Shot)\n");
             break;
 
           case SDLK_LEFT:
@@ -170,8 +171,8 @@ int main() {
             printf("Key Up: 2 (p2start)\n");
             break;
           case SDLK_SPACE:
-            cpu.fire = false;
             cpu.p1shot = false;
+            cpu.fire = false;
             printf("Key Up: SPACE (fire, p1shot)\n");
             break;
           case SDLK_LEFT:
