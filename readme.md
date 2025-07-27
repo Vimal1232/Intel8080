@@ -3,7 +3,7 @@
 A custom-built Intel 8080 emulator capable of accurately running **Space Invaders** arcade game. This project includes hardware-specific I/O emulation and graphics output using SDL
 
 ## 🕹️ Game Play
-<img src="./demo.gif"/>
+<img src="Demo.gif"/>
 
 ## 🚀 Features
 - ✅ Full Intel 8080 instruction set emulation
